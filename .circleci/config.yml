@@ -1,0 +1,39 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: $BUILD_CONTAINER_IMAGE
+        auth:
+          username: _json_key
+          password: $GCR_TM_AUTH
+    working_directory: /home/circleci/repo
+    steps:
+      - checkout
+      - run:
+          name: Export paths for repo
+          # $BASH_ENV is a reserved environment variable by CircleCI of the location
+          # of their bashrc file. This allow us to add to the whole run's available commands easily.
+          command: ~/devenv/bluecore activate >> $BASH_ENV
+      - run:
+          name: check if release is possible
+          command: |
+            source ~/circleVenv/bin/activate
+            PACKAGE_VERSION=v$(python setup.py --version)
+            if git rev-parse $PACKAGE_VERSION > /dev/null 2>&1
+            then
+              >&2 echo "Tag ${PACKAGE_VERSION} already in use. Would not release. Please update version in setup.py."
+              exit 1
+            fi
+            if [ $CIRCLE_BRANCH == 'master' ]; then
+                echo "${JFROG_PYPI_TOKEN}"
+                pip2 install twine
+                pip3 install twine
+                python2 setup.py upload
+                python3 setup.py upload
+            fi
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build:
+          context: build-global
